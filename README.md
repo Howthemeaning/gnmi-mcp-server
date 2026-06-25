@@ -1,189 +1,248 @@
 # gnmi-mcp-server
 
-> MCP server for gNMI network device management — powered by [gnmic](https://github.com/openconfig/gnmic)
+> Go MCP server for gNMI network device management — built on [gnmic](https://github.com/openconfig/gnmic)'s Go API.
 
-`gnmi-mcp-server` 将 gNMI 协议的网络设备管理能力暴露给 AI 助手（OpenCode、Claude Code），通过 MCP (Model Context Protocol) 实现自然语言驱动的网络运维。
+`gnmi-mcp-server` exposes gNMI device operations to AI assistants (Claude Code, Codex, OpenCode) via the Model Context Protocol. It is a single statically linked binary with no runtime dependencies.
 
-## 功能
+> **Tested devices:** validated against **Arista EOS** (gNMI; OpenConfig + eos_native) and **Nokia SR OS** (state tree). Other gNMI / OpenConfig platforms should work but are **untested** — paths and behavior vary by vendor; use `gnmi_capabilities` to confirm what a device supports.
 
-| MCP 工具 | 对应 gNMI RPC | 说明 |
-|----------|---------------|------|
-| `gnmi_capabilities` | Capabilities | 查询设备支持的 gNMI 版本、YANG 模型、编码格式 |
-| `gnmi_get` | Get | 读取设备配置/状态数据（支持路径截断） |
-| `gnmi_set` | Set | 修改设备配置（两阶段确认：dry-run 预览 → token 确认） |
-| `gnmi_subscribe` | Subscribe | 遥测订阅（ONCE 一次性快照 / STREAM 流式 / POLL 轮询） |
-| `gnmi_session_list` | — | 列出所有活跃的订阅会话 |
-| `gnmi_session_stop` | — | 停止指定订阅会话 |
-| `gnmi_session_tail` | — | 读取会话最近的遥测数据 |
-| `gnmi_path` | — | 从 YANG 模型浏览可用的 gNMI 路径（可选） |
+## Install
 
-## 安装
-
-### 前置条件
-
-- Python >= 3.11
-- [uv](https://docs.astral.sh/uv/) 或 pip
-
-### 通过 uv 安装（推荐）
+**One-line install (macOS / Linux)** — downloads the right binary into `/usr/local/bin`:
 
 ```bash
-git clone https://github.com/your-org/gnmi-mcp-server.git
-cd gnmi-mcp
-uv run gnmi-mcp-server --help
+curl -fsSL https://raw.githubusercontent.com/Howthemeaning/gnmi-mcp-server/main/install.sh | sh
 ```
 
-### 通过 pip 安装
+Install without sudo: `INSTALL_DIR="$HOME/.local/bin" curl -fsSL .../install.sh | sh` (make sure that directory is on your `PATH`).
+
+**Manual:** grab your platform's archive from the [Releases](https://github.com/Howthemeaning/gnmi-mcp-server/releases) page, extract it, and put `gnmi-mcp-server` on your `PATH`:
+
+| Platform | Asset |
+|----------|-------|
+| Linux x86_64 | `gnmi-mcp-server_linux_amd64.tar.gz` |
+| Linux ARM64 | `gnmi-mcp-server_linux_arm64.tar.gz` |
+| macOS Intel | `gnmi-mcp-server_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `gnmi-mcp-server_darwin_arm64.tar.gz` |
+
+> **macOS Gatekeeper:** a binary downloaded through the browser from the Releases page is quarantined and may be blocked on first run ("cannot verify the developer"). Clear it once before use: `xattr -d com.apple.quarantine ./gnmi-mcp-server`. (The `curl … | sh` installer is not affected — `curl` does not set the quarantine flag.)
+
+**From source** (needs Go 1.25+):
 
 ```bash
-pip install -e /path/to/gnmi-mcp
+go install github.com/Howthemeaning/gnmi-mcp-server@latest
 ```
 
-启动时如未找到 `gnmic` 二进制，会**自动从 GitHub Releases 下载**对应平台的静态二进制（SHA256 校验）。
+### For AI agents (one-shot)
 
-## 配置
-
-全部通过环境变量配置，无需配置文件。
-
-### 1. 在 Shell Profile 中设置设备账密
+An agent can install, seed a config, and register the server in one block (macOS / Linux):
 
 ```bash
-# ~/.bash_profile 或 ~/.zshrc
-export GNMI_USER_CORE_SWITCH="admin"
-export GNMI_PASS_CORE_SWITCH="s3cret!"
-
-export GNMI_USER_LEAF_01="operator"
-export GNMI_PASS_LEAF_01="0p3r@t0r!"
+# 1. install the binary onto your PATH
+curl -fsSL https://raw.githubusercontent.com/Howthemeaning/gnmi-mcp-server/main/install.sh | sh
+# 2. seed a config, then edit devices + credentials
+mkdir -p ~/.gnmi-mcp-server
+curl -fsSL https://raw.githubusercontent.com/Howthemeaning/gnmi-mcp-server/main/gnmi-mcp.example.yaml \
+  -o ~/.gnmi-mcp-server/config.yaml
+# 3. auto-register with every detected client (Claude Code / Codex / OpenCode)
+gnmi-mcp-server install
 ```
 
-### 2. 在 AI 客户端中配置 MCP Server
+`gnmi-mcp-server install` detects each client and wires it up — Claude Code and Codex via their `mcp add` CLIs, OpenCode by merging `opencode.json` (idempotent; skips clients it can't find). Pass `--config /abs/path.yaml` to bake a specific config path into the registration.
 
-**OpenCode** (`opencode.json`)：
+## Updating
+
+```bash
+gnmi-mcp-server update
+```
+
+Downloads the latest release, verifies its SHA256 checksum, and atomically replaces the binary in place — then restart your MCP client. (Re-running `curl … install.sh | sh` or `go install …@latest` also updates.) On startup the server checks at most once per day and logs a note to its log file when a newer version is available; it never updates silently.
+
+> If the binary lives in a root-owned directory (e.g. `/usr/local/bin`), run `sudo gnmi-mcp-server update`. Installing to `~/.local/bin` avoids sudo.
+
+## Configuration
+
+Copy the template and edit it for your devices:
+
+```bash
+cp gnmi-mcp.example.yaml ~/.gnmi-mcp-server/config.yaml
+chmod 600 ~/.gnmi-mcp-server/config.yaml   # if you keep credentials inline
+```
+
+`gnmi-mcp.example.yaml` (in this repo) documents every field. A minimal config looks like this. Passwords may be literals or `${ENV_VAR}` / `${ENV_VAR:-default}` references — the server interpolates them at startup so credentials never appear in the MCP tool arguments.
+
+```yaml
+devices:
+  core-switch:
+    address: 192.168.1.1:57400
+    username: admin
+    password: ${GNMI_PASS_CORE_SWITCH}   # env-var interpolation
+    skip-verify: true                    # skip TLS cert verification
+
+  leaf-01:
+    address: 10.0.0.1:57400
+    username: operator
+    password: ${GNMI_PASS_LEAF_01}
+    timeout: 30s                         # default: 30s
+
+# Optional global settings
+read-only: false          # set true to disable gnmi_set
+# allow-arbitrary: false  # set true to allow ad-hoc host:port targets
+# yang-dir: ~/yang        # enables gnmi_path tool
+# data-dir: ~/.gnmi-mcp-server/data
+# log-level: info         # debug / info / warn / error
+```
+
+### Where to put the config
+
+The server looks for its config in this order (first match wins):
+
+1. `--config <path>` flag
+2. `GNMI_CONFIG=<path>` environment variable
+3. `./gnmi-mcp.yaml` in the current working directory
+4. `~/.gnmi-mcp-server/config.yaml` (home default)
+
+Two recommended setups:
+
+- **Zero-arg (simplest):** put your config at `~/.gnmi-mcp-server/config.yaml`, then launch with just `gnmi-mcp-server` — no `--config` needed.
+- **Explicit (portable):** put the config anywhere and pass `--config /abs/path/gnmi-mcp.yaml`.
+
+> When the server is launched by an MCP client (opencode / Claude Code), the working directory is unpredictable — do **not** rely on `./gnmi-mcp.yaml`. Use the home default or an absolute `--config` path.
+
+Start the server manually to test:
+
+```bash
+gnmi-mcp-server --config /path/to/gnmi-mcp.yaml
+# or, with ~/.gnmi-mcp-server/config.yaml in place:
+gnmi-mcp-server
+```
+
+### TLS
+
+To use mutual TLS, add `tls-ca`, `tls-cert`, and `tls-key` under a device. Set `tls-dir` at the top level to restrict certificate paths to a safe directory:
+
+```yaml
+tls-dir: /etc/gnmi-certs
+devices:
+  secure-router:
+    address: 10.1.0.1:57400
+    username: admin
+    password: ${ROUTER_PASS}
+    tls-ca: ca.pem        # relative to tls-dir
+    tls-cert: client.pem
+    tls-key: client.key
+```
+
+## MCP Client Setup
+
+It's a standard stdio MCP server, so any MCP client works. With the binary on your `PATH` and a config at `~/.gnmi-mcp-server/config.yaml`, the launch command is just `gnmi-mcp-server` — no args. Add `--config /abs/path.yaml` only if the config lives elsewhere.
+
+**Auto-wire everything:** `gnmi-mcp-server install` registers the server with every detected client. Or configure one manually:
+
+### Claude Code
+
+```bash
+claude mcp add gnmi -s user -- gnmi-mcp-server
+```
+
+Or edit `~/.claude.json`:
 
 ```json
-{
-  "mcpServers": {
-    "gnmi-mcp-server": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/gnmi-mcp", "gnmi-mcp-server"],
-      "env": {
-        "GNMI_DEVICES": "[{\"name\":\"core-switch\",\"address\":\"192.168.1.1:57400\"},{\"name\":\"leaf-01\",\"address\":\"10.0.0.1:57400\"}]"
-      }
-    }
-  }
-}
+{ "mcpServers": { "gnmi": { "command": "gnmi-mcp-server" } } }
 ```
 
-**Claude Code** (`claude_desktop_config.json`)：
+### Codex
+
+```bash
+codex mcp add gnmi -- gnmi-mcp-server
+```
+
+Or edit `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.gnmi]
+command = "gnmi-mcp-server"
+# args = ["--config", "/abs/path/gnmi-mcp.yaml"]   # optional; default is ~/.gnmi-mcp-server/config.yaml
+```
+
+### OpenCode (`opencode.json`)
 
 ```json
-{
-  "mcpServers": {
-    "gnmi-mcp-server": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/gnmi-mcp", "gnmi-mcp-server"],
-      "env": {
-        "GNMI_DEVICES": "[{\"name\":\"core-switch\",\"address\":\"192.168.1.1:57400\"}]",
-        "GNMI_USER_CORE_SWITCH": "admin",
-        "GNMI_PASS_CORE_SWITCH": "s3cret!"
-      }
-    }
-  }
-}
+{ "mcp": { "gnmi": { "type": "local", "command": ["gnmi-mcp-server"], "enabled": true } } }
 ```
 
-### 完整环境变量
+## Tools
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `GNMI_DEVICES` | `[]` | JSON 数组，定义设备名称、地址、TLS 配置 |
-| `GNMI_USER_<NAME>` | (必填) | 设备 `<NAME>` 的用户名（大写，`-` → `_`） |
-| `GNMI_PASS_<NAME>` | (必填) | 设备 `<NAME>` 的密码 |
-| `GNMI_READ_ONLY` | `false` | `true` 时禁用 `gnmi_set` 工具 |
-| `GNMI_ALLOW_ARBITRARY` | `false` | `true` 时允许直接指定未预定义的 address |
-| `GNMI_TLS_DIR` | — | TLS 证书文件的允许目录 |
-| `GNMI_YANG_DIR` | — | YANG 模型目录（设置后启用 `gnmi_path` 工具） |
-| `GNMI_BINARY_PATH` | — | 手动指定 gnmic 二进制路径 |
-| `GNMI_VERSION` | `latest` | 自动下载的 gnmic 版本 |
-| `GNMI_DATA_DIR` | `~/.gnmi-mcp-server/data` | 会话输出和日志存储目录 |
-| `GNMI_LOG_LEVEL` | `INFO` | 日志级别 |
+| Tool | gNMI RPC | Description |
+|------|----------|-------------|
+| `gnmi_targets` | — | List the devices configured on this server (target names + addresses). |
+| `gnmi_capabilities` | Capabilities | Query supported gNMI version, YANG models, and encodings. Results are cached for 5 minutes. |
+| `gnmi_get` | Get | Read configuration or state data from a device. Supports path, type (CONFIG/STATE/OPERATIONAL/ALL), encoding, and output truncation via `max_bytes`. |
+| `gnmi_set` | Set | Two-phase config write: first call returns a dry-run preview and a `confirm_token`; call again with `confirm=<token>` to apply. Token expires in 10 minutes. Disabled when `read-only: true`. |
+| `gnmi_subscribe` | Subscribe | ONCE returns a telemetry snapshot synchronously; STREAM starts a background session (manage via `gnmi_session_*`). POLL is not supported — use STREAM or ONCE. |
+| `gnmi_session_list` | — | List all subscribe sessions and their current status. |
+| `gnmi_session_stop` | — | Stop a running subscribe session. |
+| `gnmi_session_tail` | — | Read the most recent telemetry lines from a session's output. |
+| `gnmi_path` | — | List available YANG modules under the configured `yang-dir` (only registered when `yang-dir` is set). |
 
-`GNMI_DEVICES` 格式：
+All tools accept `target` (a device name from the config) or, when `allow-arbitrary` is enabled, a raw `address` (host:port).
 
-```json
-[
-  {
-    "name": "core-switch",
-    "address": "192.168.1.1:57400",
-    "insecure": false,
-    "tls_ca": "ca.pem",
-    "tls_cert": "client.pem",
-    "tls_key": "client-key.pem",
-    "timeout": "30s"
-  }
-]
-```
+### Prompts
 
-### 安全特性
+Guided templates (MCP prompts) that expand into ready-to-run requests; each takes a `target`:
 
-- 凭证**只通过环境变量**传递，绝不出现于 MCP 工具参数或进程命令行（防 `ps aux` 泄露）
-- `gnmi_set` 默认 **dry-run 预览**，需二次确认 token 才真正下发
-- 路径参数（TLS 证书、YANG 文件）通过 `os.path.realpath()` 前缀校验防路径遍历
-- 会话名白名单字符 `[A-Za-z0-9_-]`，防注入
+- `device_health` — uptime + interface errors + BGP state summary
+- `interface_errors` — interfaces with non-zero errors/discards
+- `bgp_status` — BGP neighbors and session state
 
-## 使用示例
-
-在 AI 助手中直接对话：
+## Example Interaction
 
 ```
-> 查看 core-switch 支持哪些 YANG 模型
-AI 调用 gnmi_capabilities(target="core-switch")
+> What YANG models does core-switch support?
+AI calls gnmi_capabilities(target="core-switch")
 
-> 读取 core-switch 的系统平台信息
-AI 调用 gnmi_get(target="core-switch", path="/state/system/platform")
+> Read the system uptime from core-switch
+AI calls gnmi_get(target="core-switch", path="/state/system/uptime")
 
-> 把 core-switch 的主机名改成 new-name
-AI 调用 gnmi_set(operations=[{"op":"update","path":"/system/name","value":"new-name"}])
-→ 返回 dry_run 预览 + confirm_token
-AI 调用 gnmi_set(operations=[...], confirm="<token>")
-→ 执行成功
+> Rename core-switch hostname to dc1-core
+AI calls gnmi_set(target="core-switch", operations=[{"op":"update","path":"/system/name","value":"\"dc1-core\""}])
+→ returns dry-run preview + confirm_token
+AI calls gnmi_set(target="core-switch", operations=[...], confirm="<token>")
+→ applied
 
-> 监控 core-switch 的端口统计，每 10 秒采样
-AI 调用 gnmi_subscribe(target="core-switch", path="/state/port/statistics", mode="STREAM", stream_mode="SAMPLE", sample_interval="10s")
-→ 返回 session 信息
+> Stream interface counters from core-switch, sampled every 10s
+AI calls gnmi_subscribe(target="core-switch", path="/interfaces/interface/state/counters",
+                        mode="STREAM", stream_mode="SAMPLE", sample_interval="10s",
+                        session_name="counters-stream")
 
-> 查看最新数据
-AI 调用 gnmi_session_tail(session_name="...")
+> Show latest telemetry
+AI calls gnmi_session_tail(session_name="counters-stream")
 ```
 
-## 项目结构
+## Configuration Reference
 
-```
-gnmi-mcp-server/
-├── pyproject.toml
-├── src/gnmi_mcp_server/
-│   ├── server.py                      # MCP server 主入口
-│   ├── lib/
-│   │   ├── config.py                  # 环境变量配置加载
-│   │   ├── gnmic.py                   # gnmic 子进程管理（GnmicClient）
-│   │   ├── installer.py               # gnmic 二进制自动下载 + SHA256 校验
-│   │   └── session.py                 # subscribe 会话生命周期（SessionManager）
-│   └── tools/
-│       ├── _common.py                 # 共享辅助函数
-│       ├── capabilities.py            # gnmi_capabilities
-│       ├── get.py                     # gnmi_get
-│       ├── set.py                     # gnmi_set（dry-run + confirm）
-│       ├── subscribe.py               # gnmi_subscribe
-│       ├── session_list.py            # gnmi_session_list
-│       ├── session_stop.py            # gnmi_session_stop
-│       ├── session_tail.py            # gnmi_session_tail
-│       └── path.py                    # gnmi_path（可选）
-└── tests/
+Full field documentation is in [`docs/superpowers/specs/2026-06-25-gnmi-mcp-go-design.md`](docs/superpowers/specs/2026-06-25-gnmi-mcp-go-design.md).
+
+## Building from Source
+
+Requires Go 1.25+.
+
+```bash
+git clone https://github.com/Howthemeaning/gnmi-mcp-server.git
+cd gnmi-mcp-server
+go build -o gnmi-mcp-server .
 ```
 
-## 许可证
+> **macOS dev note:** if you copy a freshly rebuilt binary over an existing one already on your `PATH` and it dies with `killed: 9`, the copy invalidated the code signature — re-sign it with `codesign --force --sign - <path>`, or `rm` the old file before copying (a fresh inode avoids the cached-signature kill).
 
-MIT License — 随意使用、修改和分发。
+## Releasing
+
+Tagged pushes (`v*`) trigger the [release workflow](.github/workflows/release.yml) which uses [goreleaser](https://goreleaser.com) to build and publish binaries for Linux and macOS (amd64 and arm64).
+
+## License
+
+MIT License — use, modify, and distribute freely.
 
 ---
 
-Built with [gnmic](https://github.com/openconfig/gnmic) · [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
+Built with [gnmic](https://github.com/openconfig/gnmic) · [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk)

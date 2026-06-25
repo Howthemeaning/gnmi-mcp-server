@@ -1,7 +1,9 @@
-__pycache__/
-*.pyc
-.venv/
 dist/
-*.egg-info/
 .gnmi-mcp/
 docs/
+
+# Go
+/gnmi-mcp-server
+/dist/
+*.test
+*.out

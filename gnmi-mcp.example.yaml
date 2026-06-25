@@ -1,0 +1,47 @@
+# ============================================================================
+# gnmi-mcp-server configuration — TEMPLATE
+#
+# Quick start:
+#   cp gnmi-mcp.example.yaml ~/.gnmi-mcp-server/config.yaml
+#   chmod 600 ~/.gnmi-mcp-server/config.yaml      # if you put credentials inline
+#   # edit the devices below, then launch:  gnmi-mcp-server
+#
+# The server finds its config in this order: --config <path>, GNMI_CONFIG=<path>,
+# ./gnmi-mcp.yaml, then ~/.gnmi-mcp-server/config.yaml. See README.
+# (Addresses below use the RFC 5737 documentation range — replace them.)
+# ============================================================================
+
+devices:
+  # Each key is the device name you pass as `target` to the tools.
+  core-switch:
+    address: 192.0.2.1:57400        # host:port of the device's gNMI endpoint
+    username: admin                 # literal value (chmod 600 this file) ...
+    password: changeme              # ... or use ${ENV} interpolation (see below)
+    insecure: true                  # true = plaintext gRPC, no TLS (default: false)
+
+  edge-router:
+    address: 192.0.2.2:57400
+    # Pull credentials from the environment so secrets stay out of the file.
+    #   ${VAR}            -> error at startup if VAR is unset
+    #   ${VAR:-default}   -> fall back to "default" if VAR is unset
+    username: ${GNMI_USER_EDGE:-admin}
+    password: ${GNMI_PASS_EDGE:-admin}
+    skip-verify: true               # use TLS but skip cert verification (default: false)
+    timeout: 30s                    # per-request timeout (default: 30s)
+    # Mutual TLS — file paths are restricted to tls-dir (below) when it is set:
+    # tls-ca: ca.pem
+    # tls-cert: client.pem
+    # tls-key: client.key
+
+# ---------------------------------------------------------------------------
+# Global options — all optional; defaults shown in comments.
+# ---------------------------------------------------------------------------
+read-only: false           # true = hide gnmi_set entirely (safe query-only mode)
+allow-arbitrary: false     # true = tools may target an ad-hoc address not listed above
+
+# data-dir: ~/.gnmi-mcp-server/data   # subscribe-session output + server logs
+# log-level: info                     # debug / info / warn / error
+# log-max-size: 10485760              # rotate output/log files past this size (10 MB)
+# log-backup-count: 3                 # number of rotated files to keep
+# tls-dir: /etc/gnmi-certs            # if set, all TLS file paths must live inside it
+# yang-dir: ~/yang                    # if set, enables the gnmi_path tool
