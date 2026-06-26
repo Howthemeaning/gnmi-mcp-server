@@ -54,6 +54,8 @@ func RegisterCapabilities(server *mcp.Server, client gnmi.GnmiClient, cfg *confi
 		if err != nil {
 			return textResult(err.Error(), true), nil, nil
 		}
+		// Cache key uses address + transport security settings only;
+		// capabilities are assumed independent of username/client certs.
 		key := fmt.Sprintf("%s|insecure=%t|skipverify=%t", dev.Address, dev.Insecure, dev.SkipVerify)
 		if cached, ok := cache.get(key); ok {
 			return textResult(string(cached), false), nil, nil

@@ -38,7 +38,27 @@ type tokenStore struct {
 	m  map[string]pendingSet
 }
 
-func newTokenStore() *tokenStore { return &tokenStore{m: map[string]pendingSet{}} }
+func newTokenStore() *tokenStore {
+	s := &tokenStore{m: map[string]pendingSet{}}
+	go s.reapLoop()
+	return s
+}
+
+// reapLoop periodically removes expired tokens to prevent unbounded memory growth.
+func (s *tokenStore) reapLoop() {
+	t := time.NewTicker(2 * time.Minute)
+	defer t.Stop()
+	for range t.C {
+		s.mu.Lock()
+		now := time.Now()
+		for k, v := range s.m {
+			if now.After(v.expiry) {
+				delete(s.m, k)
+			}
+		}
+		s.mu.Unlock()
+	}
+}
 
 func opsHash(ops []SetOpInput) string {
 	b, _ := json.Marshal(ops)

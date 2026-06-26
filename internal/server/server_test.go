@@ -14,7 +14,7 @@ import (
 func listToolNames(t *testing.T, cfg *config.AppConfig) map[string]bool {
 	t.Helper()
 	mgr := session.NewManager(t.TempDir())
-	srv := BuildServer(cfg, gnmi.New(), mgr)
+	srv := BuildServer(cfg, gnmi.New(), mgr, "test")
 
 	clientT, serverT := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -80,7 +80,7 @@ func TestBuildInstructionsListsDevicesAndGuidance(t *testing.T) {
 
 func TestPromptsRegistered(t *testing.T) {
 	mgr := session.NewManager(t.TempDir())
-	srv := BuildServer(baseCfg(), gnmi.New(), mgr)
+	srv := BuildServer(baseCfg(), gnmi.New(), mgr, "test")
 
 	clientT, serverT := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -111,7 +111,7 @@ func TestPromptsRegistered(t *testing.T) {
 
 func TestPromptsRejectEmptyTarget(t *testing.T) {
 	mgr := session.NewManager(t.TempDir())
-	srv := BuildServer(baseCfg(), gnmi.New(), mgr)
+	srv := BuildServer(baseCfg(), gnmi.New(), mgr, "test")
 	clientT, serverT := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 	ss, err := srv.Connect(ctx, serverT, nil)

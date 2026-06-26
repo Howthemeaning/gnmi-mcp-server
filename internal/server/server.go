@@ -48,15 +48,67 @@ func setupLogger(cfg *config.AppConfig) {
 func buildInstructions(cfg *config.AppConfig) string {
 	var b strings.Builder
 	b.WriteString("This server runs gNMI operations against network devices.\n\n")
-	b.WriteString("Workflow:\n")
-	b.WriteString("- Call gnmi_targets to list configured devices. Pass a target NAME (not a raw address) to every tool.\n")
-	b.WriteString("- gnmi_capabilities(target): discover a device's supported YANG models/encodings when unsure which paths exist.\n")
-	b.WriteString("- gnmi_get(target, path): read config/state data. Paths are vendor/model-specific.\n")
-	b.WriteString("- gnmi_set(target, operations): two-phase. The first call returns a dry-run preview plus a confirm_token; call again with the same operations and confirm=<token> to apply.\n")
-	b.WriteString("- gnmi_subscribe(target, path, mode): ONCE returns a snapshot; STREAM starts a background session managed via gnmi_session_list / gnmi_session_stop / gnmi_session_tail.\n\n")
-	b.WriteString("Example paths (always verify per device with gnmi_capabilities):\n")
-	b.WriteString("- OpenConfig (Arista and most vendors): /interfaces/interface/state/counters, /system/state, /network-instances/network-instance/protocols/protocol/bgp/neighbors/neighbor/state\n")
-	b.WriteString("- Nokia SR OS state tree: /state/port/ethernet/statistics, /state/system/up-time, /state/router/interface/statistics\n\n")
+
+	b.WriteString("== gNMI concepts ==\n\n")
+
+	b.WriteString("Path: a gNMI path references a data node in the device's YANG schema.\n")
+	b.WriteString("Always start with '/' (e.g. /interfaces/interface/state/counters).\n")
+	b.WriteString("Use gnmi_capabilities to discover which YANG models a device supports.\n")
+	b.WriteString("Prefix: optional base path prepended to every path in the request (used for\n")
+	b.WriteString("origin routing; rarely needed in practice — leave empty unless the device\n")
+	b.WriteString("requires a specific origin like 'openconfig:' or 'eos_native:').\n\n")
+
+	b.WriteString("Data type (gnmi_get): controls which datastore to query.\n")
+	b.WriteString("  CONFIG      — intended configuration (what you wrote)\n")
+	b.WriteString("  STATE       — read-only operational state (counters, uptime, BGP status)\n")
+	b.WriteString("  OPERATIONAL — applied/running config + derived state (device's ground truth)\n")
+	b.WriteString("  ALL         — everything (default when omitted)\n\n")
+
+	b.WriteString("Encoding: controls the JSON format of the response.\n")
+	b.WriteString("  json_ietf — compact, structured JSON_IETF (default; recommended)\n")
+	b.WriteString("  json      — legacy JSON-serialized bytes (more verbose, includes empty fields)\n\n")
+
+	b.WriteString("Subscribe mode (gnmi_subscribe):\n")
+	b.WriteString("  ONCE   — one-time telemetry snapshot, returns immediately\n")
+	b.WriteString("  STREAM — continuous background telemetry; managed via gnmi_session_*\n\n")
+
+	b.WriteString("Stream mode (when mode=STREAM):\n")
+	b.WriteString("  SAMPLE           — periodic polling at sample_interval (e.g. 10s)\n")
+	b.WriteString("  ON_CHANGE        — push only when data changes (heartbeat_interval sends\n")
+	b.WriteString("                      an empty update if nothing changed)\n")
+	b.WriteString("  TARGET_DEFINED   — device chooses the mode (use after checking capabilities)\n\n")
+
+	b.WriteString("Set operations (gnmi_set):\n")
+	b.WriteString("  update  — merge value into an existing path (non-destructive)\n")
+	b.WriteString("  replace — overwrite the path's content (destructive; use update when possible)\n")
+	b.WriteString("  delete  — remove a path (no value needed)\n")
+	b.WriteString("gnmi_set is TWO-PHASE for safety: the first call always does a dry-run and\n")
+	b.WriteString("returns a confirm_token. Only on the second call with confirm=<token> does\n")
+	b.WriteString("the change actually apply. Token expires in 10 minutes.\n\n")
+
+	b.WriteString("== Workflow ==\n\n")
+	b.WriteString("1. gnmi_targets — list all configured devices and their addresses.\n")
+	b.WriteString("   Pass target NAMES (not raw addresses) to every other tool.\n")
+	b.WriteString("2. gnmi_capabilities(target) — discover a device's gNMI version, supported\n")
+	b.WriteString("   YANG models, and encodings. Always call this first when unsure which\n")
+	b.WriteString("   paths exist on a device.\n")
+	b.WriteString("3. gnmi_get(target, path) — read config or state data.\n")
+	b.WriteString("4. gnmi_set(target, operations) — two-phase config write (see above).\n")
+	b.WriteString("5. gnmi_subscribe(target, path, mode) — telemetry snapshot (ONCE) or\n")
+	b.WriteString("   continuous stream (STREAM → gnmi_session_tail/stop).\n\n")
+
+	b.WriteString("== Vendor path hints (always verify with gnmi_capabilities first) ==\n\n")
+	b.WriteString("OpenConfig (Arista, Cisco, Juniper, Nokia):\n")
+	b.WriteString("  /interfaces/interface/state/counters\n")
+	b.WriteString("  /interfaces/interface/subinterfaces/subinterface/state/counters\n")
+	b.WriteString("  /system/state\n")
+	b.WriteString("  /network-instances/network-instance/protocols/protocol/bgp/neighbors/neighbor/state\n")
+	b.WriteString("  /components/component/state\n\n")
+	b.WriteString("Nokia SR OS state tree (non-OpenConfig):\n")
+	b.WriteString("  /state/port/ethernet/statistics\n")
+	b.WriteString("  /state/system/up-time\n")
+	b.WriteString("  /state/router/interface/statistics\n")
+	b.WriteString("  /state/service/vprn/bgp/neighbor\n\n")
 
 	if len(cfg.Devices) == 0 {
 		b.WriteString("No devices are configured yet.\n")
@@ -67,7 +119,7 @@ func buildInstructions(cfg *config.AppConfig) string {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	b.WriteString("Configured targets:\n")
+	b.WriteString("== Configured targets ==\n\n")
 	for _, n := range names {
 		b.WriteString("  - " + n + " (" + cfg.Devices[n].Address + ")\n")
 	}
@@ -75,9 +127,9 @@ func buildInstructions(cfg *config.AppConfig) string {
 }
 
 // BuildServer creates the MCP server and conditionally registers tools.
-func BuildServer(cfg *config.AppConfig, client gnmi.GnmiClient, mgr *session.Manager) *mcp.Server {
+func BuildServer(cfg *config.AppConfig, client gnmi.GnmiClient, mgr *session.Manager, version string) *mcp.Server {
 	srv := mcp.NewServer(
-		&mcp.Implementation{Name: "gnmi-mcp-server", Version: "2.0.0"},
+		&mcp.Implementation{Name: "gnmi-mcp-server", Version: version},
 		&mcp.ServerOptions{Instructions: buildInstructions(cfg)},
 	)
 	tools.RegisterTargets(srv, cfg)
@@ -101,7 +153,7 @@ func Run(ctx context.Context, cfg *config.AppConfig, version string) error {
 	mgr.SetRotation(cfg.LogMaxSize, cfg.LogBackupCount)
 	mgr.RecoverOnStartup()
 
-	srv := BuildServer(cfg, client, mgr)
+	srv := BuildServer(cfg, client, mgr, version)
 
 	sigCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

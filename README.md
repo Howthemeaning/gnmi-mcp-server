@@ -1,5 +1,11 @@
 # gnmi-mcp-server
 
+[![CI](https://github.com/Howthemeaning/gnmi-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Howthemeaning/gnmi-mcp-server/actions/workflows/ci.yml)
+[![Go 1.25+](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)](https://go.dev)
+[![License MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 > Go MCP server for gNMI network device management — built on [gnmic](https://github.com/openconfig/gnmic)'s Go API.
 
 `gnmi-mcp-server` exposes gNMI device operations to AI assistants (Claude Code, Codex, OpenCode) via the Model Context Protocol. It is a single statically linked binary with no runtime dependencies.
@@ -32,6 +38,17 @@ Install without sudo: `INSTALL_DIR="$HOME/.local/bin" curl -fsSL .../install.sh 
 ```bash
 go install github.com/Howthemeaning/gnmi-mcp-server@latest
 ```
+
+**Docker:**
+
+```bash
+docker build -t gnmi-mcp-server .
+docker run -i --rm \
+  -v $HOME/.gnmi-mcp-server/config.yaml:/root/.gnmi-mcp-server/config.yaml:ro \
+  gnmi-mcp-server
+```
+
+> MCP uses stdin/stdout for stdio transport, so `-i` (interactive) is required. Mount your config at the default path or pass `--config <path>`.
 
 ### For AI agents (one-shot)
 
@@ -162,13 +179,32 @@ Or edit `~/.codex/config.toml`:
 ```toml
 [mcp_servers.gnmi]
 command = "gnmi-mcp-server"
-# args = ["--config", "/abs/path/gnmi-mcp.yaml"]   # optional; default is ~/.gnmi-mcp-server/config.yaml
+# args = ["--config", "/abs/path/gnmi-mcp.yaml"]
 ```
 
 ### OpenCode (`opencode.json`)
 
 ```json
 { "mcp": { "gnmi": { "type": "local", "command": ["gnmi-mcp-server"], "enabled": true } } }
+```
+
+### Reasonix
+
+Reasonix supports standard MCP client configuration. Choose one of two methods:
+
+**`.mcp.json` (recommended, shared with Claude Code):** create `.mcp.json` at the project root:
+
+```json
+{ "mcpServers": { "gnmi": { "command": "gnmi-mcp-server" } } }
+```
+
+**`reasonix.toml`:**
+
+```toml
+[[plugins]]
+name    = "gnmi"
+command = "gnmi-mcp-server"
+# args = ["--config", "/abs/path/gnmi-mcp.yaml"]   # optional
 ```
 
 ## Tools
@@ -218,26 +254,6 @@ AI calls gnmi_subscribe(target="core-switch", path="/interfaces/interface/state/
 > Show latest telemetry
 AI calls gnmi_session_tail(session_name="counters-stream")
 ```
-
-## Configuration Reference
-
-Full field documentation is in [`docs/superpowers/specs/2026-06-25-gnmi-mcp-go-design.md`](docs/superpowers/specs/2026-06-25-gnmi-mcp-go-design.md).
-
-## Building from Source
-
-Requires Go 1.25+.
-
-```bash
-git clone https://github.com/Howthemeaning/gnmi-mcp-server.git
-cd gnmi-mcp-server
-go build -o gnmi-mcp-server .
-```
-
-> **macOS dev note:** if you copy a freshly rebuilt binary over an existing one already on your `PATH` and it dies with `killed: 9`, the copy invalidated the code signature — re-sign it with `codesign --force --sign - <path>`, or `rm` the old file before copying (a fresh inode avoids the cached-signature kill).
-
-## Releasing
-
-Tagged pushes (`v*`) trigger the [release workflow](.github/workflows/release.yml) which uses [goreleaser](https://goreleaser.com) to build and publish binaries for Linux and macOS (amd64 and arm64).
 
 ## License
 

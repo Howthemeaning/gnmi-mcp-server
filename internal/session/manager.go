@@ -80,6 +80,8 @@ func NewManager(sessionsDir string) *Manager {
 }
 
 // SetRotation 由 server 用配置覆盖默认轮转参数。
+// Must be called before any calls to Create(), as it writes fields that
+// Create() reads under the manager lock.
 func (m *Manager) SetRotation(maxSize int64, backups int) {
 	if maxSize > 0 {
 		m.maxSize = maxSize

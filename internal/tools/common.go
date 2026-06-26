@@ -32,6 +32,9 @@ func resolveDevice(cfg *config.AppConfig, target, address string) (config.Device
 		if !cfg.AllowArbitrary {
 			return config.DeviceConfig{}, fmt.Errorf("ad-hoc address is rejected unless allow-arbitrary is true in config")
 		}
+		// Ad-hoc addresses have no pre-configured credentials; connection
+		// succeeds only for unauthenticated or externally-authenticated gNMI
+		// endpoints (e.g. lab devices with no auth).
 		return config.DeviceConfig{Name: address, Address: address, Timeout: "30s"}, nil
 	}
 	return config.DeviceConfig{}, fmt.Errorf("either target or address is required")

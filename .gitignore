@@ -1,9 +1,25 @@
-dist/
-.gnmi-mcp/
-docs/
-
-# Go
+# Build artifacts
 /gnmi-mcp-server
 /dist/
+
+# IDE
+.idea/
+.vscode/
+
+# Reasonix
+.reasonix/
+reasonix.toml
+REASONIX.local.md
+
+# MCP config (may contain credentials)
+.mcp.json
+
+# Project-local gNMI config
+/gnmi-mcp.yaml
+
+# Test artifacts
 *.test
 *.out
+
+# Docs (generated)
+docs/
