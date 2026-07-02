@@ -137,3 +137,23 @@ func TestDoGetNotTruncated(t *testing.T) {
 	require.False(t, isErr)
 	require.NotContains(t, out, "truncated")
 }
+
+func TestMaxNotificationsWithoutByteTruncation(t *testing.T) {
+	// max_notifications should be applied even when the response fits in max_bytes.
+	// 5 notifications, all small, default max_bytes (131072).
+	var notifs []string
+	for i := 0; i < 5; i++ {
+		notifs = append(notifs, `{"timestamp":"1","update":[{"path":"/x","val":{"uintVal":1}}]}`)
+	}
+	raw := `{"notification":[` + strings.Join(notifs, ",") + `]}`
+	mc := &mockClient{getResp: json.RawMessage(raw)}
+	out, isErr := doGet(context.Background(), mc, cfgWithSW1(), GetInput{
+		ConnParams: ConnParams{Target: "sw1"}, Path: "/x", MaxNotifications: 2,
+	})
+	require.False(t, isErr)
+	var parsed map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(out), &parsed))
+	var kept []json.RawMessage
+	require.NoError(t, json.Unmarshal(parsed["notification"], &kept))
+	require.Len(t, kept, 2)
+}

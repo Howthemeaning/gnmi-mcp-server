@@ -150,6 +150,36 @@ devices:
     tls-key: client.key
 ```
 
+### Troubleshooting: "environment variable referenced in config is not set"
+
+This error usually means you launched the server from a macOS GUI app (Reasonix desktop, Claude Code.app, etc.). macOS GUI apps inherit their environment from `launchd`, **not** from `~/.zshrc` or `~/.bash_profile` — they never see shell-exported variables.
+
+Three fixes, in order of simplicity:
+
+**Option A — set `env` in your MCP client config:**
+
+- **Reasonix** (`reasonix.toml`):
+  ```toml
+  [[plugins]]
+  name    = "gnmi"
+  command = "gnmi-mcp-server"
+  env     = { GNMI_TELEMETRY_USER = "...", GNMI_TELEMETRY_PASS = "..." }
+  ```
+- **Claude Code** (`claude.json`):
+  ```json
+  { "mcpServers": { "gnmi": { "command": "gnmi-mcp-server", "env": { "GNMI_TELEMETRY_USER": "...", "GNMI_TELEMETRY_PASS": "..." } } } }
+  ```
+- **Codex** (`config.toml`):
+  ```toml
+  [mcp_servers.gnmi]
+  command = "gnmi-mcp-server"
+  env = { GNMI_TELEMETRY_USER = "...", GNMI_TELEMETRY_PASS = "..." }
+  ```
+
+**Option B — replace `${VAR}` with plaintext in `config.yaml`.**
+
+**Option C — add `export` lines to `~/.reasonix/.env`** (Reasonix only, for CLI mode).
+
 ## MCP Client Setup
 
 It's a standard stdio MCP server, so any MCP client works. With the binary on your `PATH` and a config at `~/.gnmi-mcp-server/config.yaml`, the launch command is just `gnmi-mcp-server` — no args. Add `--config /abs/path.yaml` only if the config lives elsewhere.

@@ -64,7 +64,15 @@ func expandEnv(s string) (string, error) {
 		return ""
 	})
 	if missing != "" {
-		return "", errf("environment variable %q referenced in config is not set", missing)
+		return "", errf("environment variable %q referenced in config is not set\n\n"+
+			"Guided troubleshooting:\n"+
+			"- Did you launch from a macOS GUI application (Reasonix desktop, etc.)?\n"+
+			"  GUI apps inherit environment from launchd, not from ~/.zshrc.\n"+
+			"  → Fix: set 'env' in your MCP client config, or use plaintext values in config.\n"+
+			"- For Reasonix: add 'env = { %s = \"value\" }' under [[plugins]] in reasonix.toml.\n"+
+			"- For Claude Code: add '\"env\":{\"%s\":\"value\"}' under mcpServers.gnmi in claude.json.\n"+
+			"- Or replace the ${%s} reference with the plaintext value directly in your config.",
+			missing, missing, missing, missing)
 	}
 	return out, nil
 }

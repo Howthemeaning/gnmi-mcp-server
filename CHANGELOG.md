@@ -2,7 +2,7 @@
 
 All notable changes to gnmi-mcp-server are documented in this file.
 
-## [Unreleased]
+## [1.0.2]
 
 ### Added
 - Chinese README (`README.zh-CN.md`).
@@ -27,6 +27,13 @@ All notable changes to gnmi-mcp-server are documented in this file.
 - Added Reasonix MCP client setup instructions.
 - Documentation comments for `SetRotation` call-before-Create invariant, capabilities
   cache key assumptions, and ad-hoc address credential behavior.
+- Enhanced config error message for missing `${ENV}` variables with macOS GUI / MCP
+  client troubleshooting guidance.
+- Server instructions now cover `json_ietf` namespace prefixes (`openconfig-interfaces:…`),
+  Nokia port-id bracket notation, and `max_notifications` usage for broad paths.
+- Added Troubleshooting section in both READMEs for env var issues with GUI-launched MCP clients.
+- Added `max_notifications` parameter to `gnmi_get` to limit notifications before
+  byte-level truncation, with test coverage.
 
 ## [1.0.0] — 2026-06-26
 

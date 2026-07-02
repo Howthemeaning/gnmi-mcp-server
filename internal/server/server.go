@@ -65,7 +65,9 @@ func buildInstructions(cfg *config.AppConfig) string {
 	b.WriteString("  ALL         — everything (default when omitted)\n\n")
 
 	b.WriteString("Encoding: controls the JSON format of the response.\n")
-	b.WriteString("  json_ietf — compact, structured JSON_IETF (default; recommended)\n")
+	b.WriteString("  json_ietf — compact, structured JSON_IETF (default; recommended).\n")
+	b.WriteString("    Field names include YANG namespace prefixes: 'openconfig-interfaces:in-octets'\n")
+	b.WriteString("    instead of just 'in-octets'. Strip the prefix before the colon when searching.\n")
 	b.WriteString("  json      — legacy JSON-serialized bytes (more verbose, includes empty fields)\n\n")
 
 	b.WriteString("Subscribe mode (gnmi_subscribe):\n")
@@ -93,6 +95,8 @@ func buildInstructions(cfg *config.AppConfig) string {
 	b.WriteString("   YANG models, and encodings. Always call this first when unsure which\n")
 	b.WriteString("   paths exist on a device.\n")
 	b.WriteString("3. gnmi_get(target, path) — read config or state data.\n")
+	b.WriteString("   Use max_notifications (e.g. 3) with broad paths like /interfaces/.../state\n")
+	b.WriteString("   to limit output and avoid hitting max_bytes truncation.\n")
 	b.WriteString("4. gnmi_set(target, operations) — two-phase config write (see above).\n")
 	b.WriteString("5. gnmi_subscribe(target, path, mode) — telemetry snapshot (ONCE) or\n")
 	b.WriteString("   continuous stream (STREAM → gnmi_session_tail/stop).\n\n")
@@ -108,7 +112,9 @@ func buildInstructions(cfg *config.AppConfig) string {
 	b.WriteString("  /state/port/ethernet/statistics\n")
 	b.WriteString("  /state/system/up-time\n")
 	b.WriteString("  /state/router/interface/statistics\n")
-	b.WriteString("  /state/service/vprn/bgp/neighbor\n\n")
+	b.WriteString("  /state/service/vprn/bgp/neighbor\n")
+	b.WriteString("  Nokia port IDs use bracket notation: e.g. [port-id=1/1/c2/1]\n")
+	b.WriteString("  The '/' inside brackets is part of the port identifier, not path separators.\n\n")
 
 	if len(cfg.Devices) == 0 {
 		b.WriteString("No devices are configured yet.\n")

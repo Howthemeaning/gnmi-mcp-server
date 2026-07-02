@@ -150,6 +150,36 @@ devices:
     tls-key: client.key
 ```
 
+### 故障排查："environment variable referenced in config is not set"
+
+这个错误通常意味着你是从 macOS 桌面应用启动 server 的（Reasonix 桌面版、Claude Code.app 等）。macOS GUI 应用的环境继承自 `launchd`，**不会**加载 `~/.zshrc` 或 `~/.bash_profile`——它们看不到 shell 导出的变量。
+
+三种修复方式，按简单程度排序：
+
+**方案 A —— 在 MCP 客户端配置中设置 `env`：**
+
+- **Reasonix** (`reasonix.toml`)：
+  ```toml
+  [[plugins]]
+  name    = "gnmi"
+  command = "gnmi-mcp-server"
+  env     = { GNMI_TELEMETRY_USER = "..." , GNMI_TELEMETRY_PASS = "..." }
+  ```
+- **Claude Code** (`claude.json`)：
+  ```json
+  { "mcpServers": { "gnmi": { "command": "gnmi-mcp-server", "env": { "GNMI_TELEMETRY_USER": "...", "GNMI_TELEMETRY_PASS": "..." } } } }
+  ```
+- **Codex** (`config.toml`)：
+  ```toml
+  [mcp_servers.gnmi]
+  command = "gnmi-mcp-server"
+  env = { GNMI_TELEMETRY_USER = "...", GNMI_TELEMETRY_PASS = "..." }
+  ```
+
+**方案 B —— 将 `${VAR}` 替换为明文值写入 `config.yaml`。**
+
+**方案 C —— 在 `~/.reasonix/.env` 中添加 `export` 行**（仅限 Reasonix CLI 模式）。
+
 ## MCP 客户端配置
 
 这是一个标准的 stdio MCP server，任何 MCP 客户端都可以使用。二进制在 `PATH` 上、配置在 `~/.gnmi-mcp-server/config.yaml` 时，启动命令就是 `gnmi-mcp-server` — 无需参数。仅当配置放在别处时才需要 `--config /abs/path.yaml`。
